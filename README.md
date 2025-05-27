@@ -9,7 +9,7 @@
 ### IdP (FastAPI)
 - Always returns 200 OK with
   - x-envoy-auth-headers-to-remove: authorization
-  - Authorization: Bearer NEW_TOKEN_123
+  - Authorization: Bearer NEW_TOKEN_123 (dummy)
 ### micro_service_1 – httpbin (port 80)
 - placeholder for micro_service
 - echoes the rewritten header
