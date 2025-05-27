@@ -1,0 +1,86 @@
+static_resources:
+  listeners:
+  - name: http_listener
+    address: { socket_address: { address: 0.0.0.0, port_value: 9080 } }
+    filter_chains:
+    - filters:
+      - name: envoy.filters.network.http_connection_manager
+        typed_config:
+          "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
+          stat_prefix: ingress_http
+
+          route_config:
+            name: local_route
+            virtual_hosts:
+            - name: svc1
+              domains: ["service1.local"]              # ★Host: service1.local
+              routes:
+              - match: { prefix: "/" }
+                route:  { cluster: micro_service_cluster_1 }
+            - name: svc2
+              domains: ["service2.local"]              # ★Host: service2.local
+              routes:
+              - match: { prefix: "/" }
+                route:  { cluster: micro_service_cluster_2 }
+            - name: default
+              domains: ["*"]
+              routes:
+              - match: { prefix: "/" }
+                direct_response: { status: 404 }
+
+          http_filters:
+          - name: envoy.filters.http.ext_authz
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.filters.http.ext_authz.v3.ExtAuthz
+              clear_route_cache: true
+              http_service:
+                server_uri:
+                  uri: http://idp:8081 # IDPサービスのURI
+                  cluster: idp_cluster
+                  timeout: 5s
+                path_prefix: /token_exchange
+                authorization_response:
+                  allowed_upstream_headers:
+                    patterns:
+                      - exact: authorization   
+          - name: envoy.filters.http.router
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
+
+  clusters:
+  - name: idp_cluster
+    type: LOGICAL_DNS
+    connect_timeout: 0.25s
+    dns_lookup_family: V4_ONLY
+    load_assignment:
+      cluster_name: idp_cluster
+      endpoints:
+      - lb_endpoints:
+        - endpoint:
+            address: { socket_address: { address: idp, port_value: 8081 } }
+
+  - name: micro_service_cluster_1
+    type: LOGICAL_DNS
+    connect_timeout: 0.25s
+    dns_lookup_family: V4_ONLY
+    load_assignment:
+      cluster_name: micro_service_cluster_1
+      endpoints:
+      - lb_endpoints:
+        - endpoint:
+            address: { socket_address: { address: micro_service_1, port_value: 80 } }
+
+  - name: micro_service_cluster_2
+    type: LOGICAL_DNS
+    connect_timeout: 0.25s
+    dns_lookup_family: V4_ONLY
+    load_assignment:
+      cluster_name: micro_service_cluster_2
+      endpoints:
+      - lb_endpoints:
+        - endpoint:
+            address: { socket_address: { address: micro_service_2, port_value: 8083 } }
+
+admin:
+  access_log_path: /tmp/admin_access.log
+  address: { socket_address: { address: 0.0.0.0, port_value: 9901 } }
